@@ -4,6 +4,11 @@ export type { EcmaVersion };
 
 export type CheckSyntaxOptions = {
   /**
+   * Whether to enable checking.
+   * @default process.env.NODE_ENV === 'production'
+   */
+  enable?: boolean;
+  /**
    * The target browser range of the project.
    * Its value is a standard browserslist array.
    */

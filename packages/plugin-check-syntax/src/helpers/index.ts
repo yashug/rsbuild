@@ -1,4 +1,4 @@
 export * from './generateError';
 export * from './printErrors';
-export * from './generateHtmlScripts';
+export * from './getHtmlScripts';
 export * from './utils';

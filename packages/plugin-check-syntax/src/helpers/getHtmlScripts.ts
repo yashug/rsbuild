@@ -1,10 +1,4 @@
-import { fse } from '@rsbuild/shared';
 import { Parser } from 'htmlparser2';
-
-export async function generateHtmlScripts(filepath: string) {
-  const html = await fse.readFile(filepath, 'utf-8');
-  return getHtmlScripts(html);
-}
 
 export function getHtmlScripts(html: string) {
   const inlineScripts: string[] = [];

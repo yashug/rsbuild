@@ -29,8 +29,14 @@ export function pluginCheckSyntax(
     name: PLUGIN_CHECK_SYNTAX_NAME,
 
     setup(api) {
-      api.modifyBundlerChain(async (chain, { isDev, target }) => {
-        if (isDev || target !== 'web') {
+      const { enable = process.env.NODE_ENV === 'production' } = options;
+
+      if (!enable) {
+        return;
+      }
+
+      api.modifyBundlerChain(async (chain, { target }) => {
+        if (target !== 'web') {
           return;
         }
 

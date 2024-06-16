@@ -1,11 +1,10 @@
-import { resolve } from 'node:path';
 import type { Rspack } from '@rsbuild/core';
-import { JS_REGEX, browserslistToESVersion, fse } from '@rsbuild/shared';
+import { JS_REGEX, browserslistToESVersion } from '@rsbuild/shared';
 import { parse } from 'acorn';
 import {
   checkIsExcludeSource,
   generateError,
-  generateHtmlScripts,
+  getHtmlScripts,
   printErrors,
 } from './helpers';
 import type {
@@ -15,9 +14,6 @@ import type {
   ECMASyntaxError,
   EcmaVersion,
 } from './types';
-
-type Compiler = Rspack.Compiler;
-type Compilation = Rspack.Compilation;
 
 const HTML_REGEX = /\.html$/;
 
@@ -45,39 +41,40 @@ export class CheckSyntaxPlugin {
       options.ecmaVersion || browserslistToESVersion(this.targets);
   }
 
-  apply(complier: Compiler) {
-    complier.hooks.afterEmit.tapPromise(
-      CheckSyntaxPlugin.name,
-      async (compilation: Compilation) => {
-        const outputPath = compilation.outputOptions.path || 'dist';
+  apply(compiler: Rspack.Compiler) {
+    compiler.hooks.compilation.tap(CheckSyntaxPlugin.name, (compilation) => {
+      compilation.hooks.processAssets.tapPromise(
+        {
+          name: CheckSyntaxPlugin.name,
+          stage: compiler.webpack.Compilation.PROCESS_ASSETS_STAGE_ANALYSE,
+          // @ts-expect-error
+          additionalAssets: true,
+        },
+        async (assets) => {
+          const files = Object.keys(assets).filter(
+            (assets) => HTML_REGEX.test(assets) || JS_REGEX.test(assets),
+          );
+          console.log('files', files);
+          await Promise.all(
+            files.map(async (file) => {
+              const asset = compilation.getAsset(file);
+              if (!asset) {
+                return;
+              }
 
-        // not support compilation.emittedAssets in Rspack
-        const emittedAssets = compilation
-          .getAssets()
-          .filter((a) => a.source)
-          .map((a) => {
-            // remove query from name
-            const resourcePath = a.name.split('?')[0];
-            return resolve(outputPath, resourcePath);
-          });
+              await this.check(file, asset.source.source());
+            }),
+          );
 
-        const files = emittedAssets.filter(
-          (assets) => HTML_REGEX.test(assets) || JS_REGEX.test(assets),
-        );
-        await Promise.all(
-          files.map(async (file) => {
-            await this.check(file);
-          }),
-        );
-
-        printErrors(this.errors, this.ecmaVersion);
-      },
-    );
+          printErrors(this.errors, this.ecmaVersion);
+        },
+      );
+    });
   }
 
-  private async check(filepath: string) {
+  private async check(filepath: string, content: string) {
     if (HTML_REGEX.test(filepath)) {
-      const htmlScripts = await generateHtmlScripts(filepath);
+      const htmlScripts = getHtmlScripts(content);
       await Promise.all(
         htmlScripts.map(async (script) => {
           if (!checkIsExcludeSource(filepath, this.exclude)) {
@@ -88,8 +85,7 @@ export class CheckSyntaxPlugin {
     }
 
     if (JS_REGEX.test(filepath)) {
-      const jsScript = await fse.readFile(filepath, 'utf-8');
-      await this.tryParse(filepath, jsScript);
+      await this.tryParse(filepath, content);
     }
   }
 
